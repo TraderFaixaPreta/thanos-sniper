@@ -6,7 +6,9 @@ import time
 
 TOKEN_TELEGRAM = "8262824397:AAERAJr6Epu2UvUPlOeLvJ2VJlB19o9c-xo"
 MEU_ID_TELEGRAM = "1007733041"
-alertas_enviados = set()
+
+if "alertas_enviados" not in st.session_state:
+    st.session_state.alertas_enviados = set()
 
 def enviar_alerta(mensagem):
     url = f"https://api.telegram.org/bot{TOKEN_TELEGRAM}/sendMessage"
@@ -17,16 +19,59 @@ def enviar_alerta(mensagem):
     except:
         return False
 
+def calcular_tempo(tge_dt):
+    if not tge_dt:
+        return None, "unknown"
+    agora = datetime.now(timezone.utc)
+    delta = tge_dt - agora
+    total = delta.total_seconds()
+    if total < 0: return delta, "finalizado"
+    elif total < 3600: return delta, "critico"
+    elif total < 86400: return delta, "urgente"
+    else: return delta, "normal"
+
+def formatar_tempo(delta):
+    if not delta: return "N/A"
+    total = int(delta.total_seconds())
+    if total < 0:
+        horas_atras = abs(total) // 3600
+        mins_atras = abs(total) // 60
+        if horas_atras > 0: return f"Finalizado ha {horas_atras}h"
+        return f"Finalizado ha {mins_atras}min"
+    dias = total // 86400
+    horas = (total % 86400) // 3600
+    mins = (total % 3600) // 60
+    secs = total % 60
+    if dias > 0: return f"{dias}d {horas:02}h {mins:02}m"
+    return f"{horas:02}h {mins:02}m {secs:02}s"
+
+def cor_status(status):
+    return {"critico":"#FF0000","urgente":"#FF8C00","normal":"#00FF00","finalizado":"#666666","unknown":"#444444"}.get(status,"#00FF00")
+
+def badge_status(status):
+    return {"critico":"🔴 CRITICO - MENOS DE 1H","urgente":"🟠 URGENTE - HOJE","normal":"🟢 UPCOMING","finalizado":"⚫ FINALIZADO","unknown":"⚪ A CONFIRMAR"}.get(status,"🟢 UPCOMING")
+
+def cor_risco(risco):
+    return {"BAIXO":"#00FF00","MEDIO":"#FF8C00","ALTO":"#FF0000"}.get(risco,"#FFF")
+
+def estrelas_score(score_str):
+    try:
+        n = int(score_str.split("/")[0])
+        return "★" * n + "☆" * (10 - n)
+    except:
+        return score_str
+
 def checar_e_alertar_icos(icos):
-    global alertas_enviados
     for ico in icos:
         delta, status = calcular_tempo(ico.get("tge_dt"))
         chave = f"{ico['token']}_{status}"
-        if chave in alertas_enviados:
+        if chave in st.session_state.alertas_enviados:
             continue
-        if status == "critico":
+        if status in ["critico", "urgente"]:
+            emoji = "🔴" if status == "critico" else "🟠"
+            titulo = "CRITICO - MENOS DE 1H!" if status == "critico" else "HOJE!"
             msg = (
-                f"🔴 *ALERTA CRITICO - ICO EM MENOS DE 1H!*\n\n"
+                f"{emoji} *ALERTA ICO {titulo}*\n\n"
                 f"🚀 *{ico['projeto']} ({ico['token']})*\n"
                 f"⏰ Faltam: {formatar_tempo(delta)}\n"
                 f"💵 Preco: {ico['preco']}\n"
@@ -36,20 +81,7 @@ def checar_e_alertar_icos(icos):
                 f"🔗 {ico['link']}"
             )
             if enviar_alerta(msg):
-                alertas_enviados.add(chave)
-        elif status == "urgente":
-            msg = (
-                f"🟠 *ALERTA - ICO HOJE!*\n\n"
-                f"🚀 *{ico['projeto']} ({ico['token']})*\n"
-                f"⏰ Faltam: {formatar_tempo(delta)}\n"
-                f"💵 Preco: {ico['preco']}\n"
-                f"🌐 Plataforma: {ico['plataformas']}\n"
-                f"💰 Backers: {ico['backers']}\n"
-                f"📊 FDV: {ico['fdv']} | Score: {ico['score']}\n"
-                f"🔗 {ico['link']}"
-            )
-            if enviar_alerta(msg):
-                alertas_enviados.add(chave)
+                st.session_state.alertas_enviados.add(chave)
 
 st.set_page_config(layout="wide", page_title="THANOS v5.5 - MAXIMUM", page_icon="💎")
 
@@ -61,18 +93,16 @@ if "logado" not in st.session_state:
         st.rerun()
     st.stop()
 
-# ✅ CORRIGIDO: carregar_mercado com colunas seguras
 @st.cache_data(ttl=30)
 def carregar_mercado():
     url = "https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=250&sparkline=true&price_change_percentage=1h,24h,7d"
     try:
         r = requests.get(url, timeout=15)
         df = pd.DataFrame(r.json())
+        # ✅ GARANTE TODAS AS COLUNAS NECESSARIAS
         colunas_necessarias = [
-            'image', 'symbol', 'name', 'current_price',
-            'price_change_percentage_24h', 'market_cap',
-            'total_volume', 'atl', 'atl_date', 'sparkline_in_7d',
-            'market_cap_rank'
+            'image','symbol','name','current_price','price_change_percentage_24h',
+            'market_cap','total_volume','atl','atl_date','sparkline_in_7d','market_cap_rank'
         ]
         for col in colunas_necessarias:
             if col not in df.columns:
@@ -89,7 +119,6 @@ def carregar_mercado():
         ).dt.strftime('%d/%m/%Y')
         return df.fillna(0)
     except Exception as e:
-        st.error(f"Erro ao carregar mercado: {e}")
         return pd.DataFrame()
 
 @st.cache_data(ttl=180)
@@ -198,48 +227,6 @@ def carregar_icos():
         pass
     return sorted(icos_fixos, key=lambda x: x.get("tge_dt") or datetime.max.replace(tzinfo=timezone.utc))
 
-def calcular_tempo(tge_dt):
-    if not tge_dt:
-        return None, "unknown"
-    agora = datetime.now(timezone.utc)
-    delta = tge_dt - agora
-    total = delta.total_seconds()
-    if total < 0: return delta, "finalizado"
-    elif total < 3600: return delta, "critico"
-    elif total < 86400: return delta, "urgente"
-    else: return delta, "normal"
-
-def formatar_tempo(delta):
-    if not delta: return "N/A"
-    total = int(delta.total_seconds())
-    if total < 0:
-        horas_atras = abs(total) // 3600
-        mins_atras = abs(total) // 60
-        if horas_atras > 0: return f"Finalizado ha {horas_atras}h"
-        return f"Finalizado ha {mins_atras}min"
-    dias = total // 86400
-    horas = (total % 86400) // 3600
-    mins = (total % 3600) // 60
-    secs = total % 60
-    if dias > 0: return f"{dias}d {horas:02}h {mins:02}m"
-    return f"{horas:02}h {mins:02}m {secs:02}s"
-
-def cor_status(status):
-    return {"critico":"#FF0000","urgente":"#FF8C00","normal":"#00FF00","finalizado":"#666666","unknown":"#444444"}.get(status,"#00FF00")
-
-def badge_status(status):
-    return {"critico":"🔴 CRITICO - MENOS DE 1H","urgente":"🟠 URGENTE - HOJE","normal":"🟢 UPCOMING","finalizado":"⚫ FINALIZADO","unknown":"⚪ A CONFIRMAR"}.get(status,"🟢 UPCOMING")
-
-def cor_risco(risco):
-    return {"BAIXO":"#00FF00","MEDIO":"#FF8C00","ALTO":"#FF0000"}.get(risco,"#FFF")
-
-def estrelas_score(score_str):
-    try:
-        n = int(score_str.split("/")[0])
-        return "★" * n + "☆" * (10 - n)
-    except:
-        return score_str
-
 df = carregar_mercado()
 
 st.markdown("""
@@ -286,33 +273,39 @@ t1, t2, t3, t4, t5, t6, t7 = st.tabs([
     "🆕 LISTAGENS", "🔮 SIMULADOR", "🎯 ICO RADAR", "📖 MANUAL"
 ])
 
-# ✅ CORRIGIDO t1 - colunas seguras
+# ✅ T1 - CORRIGIDO KeyError
 with t1:
-    cols_t1 = [c for c in ['image','market_cap_rank','name','symbol','current_price','price_change_percentage_24h'] if c in df.columns]
     if not df.empty:
+        cols_t1 = [c for c in ['image','market_cap_rank','name','symbol','current_price','price_change_percentage_24h'] if c in df.columns]
         st.data_editor(df[cols_t1], column_config=config_visual, hide_index=True, use_container_width=True)
     else:
         st.warning("Dados do mercado indisponiveis.")
 
-# ✅ CORRIGIDO t2
+# ✅ T2 - CORRIGIDO KeyError
 with t2:
     if not df.empty:
         df_f = df[(df['current_price'].fillna(999) <= f_p) & (df['whale_activity'].fillna(0) >= f_w)]
         cols_t2 = [c for c in ['image','symbol','current_price','sparkline_7d_clean','whale_activity'] if c in df_f.columns]
         st.data_editor(df_f[cols_t2], column_config=config_visual, hide_index=True, use_container_width=True)
+    else:
+        st.warning("Dados indisponiveis.")
 
-# ✅ CORRIGIDO t3
+# ✅ T3 - CORRIGIDO KeyError
 with t3:
     if not df.empty:
         cols_t3 = [c for c in ['name','symbol','total_volume','whale_activity'] if c in df.columns]
         st.dataframe(df.sort_values('whale_activity', ascending=False).head(50)[cols_t3], use_container_width=True)
+    else:
+        st.warning("Dados indisponiveis.")
 
-# ✅ CORRIGIDO t4
+# ✅ T4 - CORRIGIDO KeyError
 with t4:
     if not df.empty:
         df_new = df.sort_values(by='atl_date', ascending=False).head(50)
         cols_t4 = [c for c in ['image','name','symbol','data_listagem','current_price'] if c in df_new.columns]
         st.data_editor(df_new[cols_t4], column_config=config_visual, hide_index=True, use_container_width=True)
+    else:
+        st.warning("Dados indisponiveis.")
 
 with t5:
     st.subheader("🔮 Simulador de Lucro Historico")
@@ -323,7 +316,7 @@ with t5:
             with c2: v_sim = st.number_input("Investir ($):", value=100.0)
             if st.form_submit_button("🚀 SIMULAR"):
                 d = df[df['name'] == m_sim].iloc[0]
-                atl = float(d['atl']) if float(str(d['atl']).replace('0','1') or 1) != 0 else 0.0001
+                atl = float(d['atl']) if float(d['atl']) > 0 else 0.0001
                 res = (v_sim / atl) * float(d['current_price'])
                 st.markdown(f"""
                 <div class='metric-card'>
@@ -331,10 +324,14 @@ with t5:
                     <p>ATL: ${atl:.8f} | Data: {d['data_listagem']}</p>
                 </div>""", unsafe_allow_html=True)
 
+# ============================================================
+# ✅ T6 - ICO RADAR COMPLETO COM NUMERAÇÃO E NOME DESTACADO
+# ============================================================
 with t6:
-    st.markdown("<h2 style='color:#FFD700;text-align:center;'>🎯 ICO RADAR - CENTRAL DE LANCAMENTOS</h2>", unsafe_allow_html=True)
+    st.markdown("<h2 style='color:#FFD700;text-align:center;'>🎯 ICO RADAR — CENTRAL DE LANÇAMENTOS</h2>", unsafe_allow_html=True)
     hoje_utc = datetime.now(timezone.utc)
     icos = carregar_icos()
+
     total = len(icos)
     hoje_count = sum(1 for i in icos if i.get("tge_dt") and i["tge_dt"].date() == hoje_utc.date())
     urgentes = sum(1 for i in icos if calcular_tempo(i.get("tge_dt"))[1] in ["critico","urgente"])
@@ -375,7 +372,10 @@ with t6:
             st.success("Alertas enviados!")
 
     st.divider()
+
+    # ✅ NUMERAÇÃO + NOME DESTACADO
     encontrou = False
+    numero_ico = 0
     for ico in icos:
         delta, status = calcular_tempo(ico.get("tge_dt"))
         tge_dt = ico.get("tge_dt")
@@ -384,92 +384,137 @@ with t6:
         if ico.get("risco","MEDIO") not in filtro_risco: continue
 
         encontrou = True
+        numero_ico += 1
         cor = cor_status(status)
         badge = badge_status(status)
         tempo_str = formatar_tempo(delta)
-        hora_utc = tge_dt.strftime("%H:%M UTC") if tge_dt else "N/A"
+        hora_utc_str = tge_dt.strftime("%H:%M UTC") if tge_dt else "N/A"
         hora_brt = ico.get("hora_brt","N/A")
         c_risco = cor_risco(ico.get("risco","MEDIO"))
         estrelas = estrelas_score(ico.get("score","N/A"))
+
         bg_map = {
             "critico":   "background:linear-gradient(135deg,#1a0000,#0d0000);border:2px solid #FF0000;box-shadow:0 0 30px #FF000066;",
             "urgente":   "background:linear-gradient(135deg,#1a0800,#0d0500);border:2px solid #FF8C00;box-shadow:0 0 25px #FF8C0066;",
             "normal":    "background:linear-gradient(135deg,#001a00,#000d00);border:2px solid #00FF00;box-shadow:0 0 20px #00FF0033;",
-            "finalizado":"background:#0a0a0a;border:2px solid #333;opacity:0.75;"
+            "finalizado":"background:#0a0a0a;border:2px solid #333;opacity:0.8;"
         }
         bg_style = bg_map.get(status, bg_map["normal"])
         botao_comprar = "ENCERRADO" if status == "finalizado" else "COMPRAR AGORA"
         tag_encerrado = (
             f"<span style='background:#FF000033;color:#FF0000;padding:8px 15px;"
             f"border-radius:5px;font-size:13px;font-weight:bold;margin-left:5px;"
-            f"border:1px solid #FF0000;'>VENDA ENCERRADA - {hora_brt}</span>"
+            f"border:1px solid #FF0000;'>✖ VENDA ENCERRADA — {hora_brt}</span>"
             if status == "finalizado" else ""
         )
 
         st.markdown(f"""
         <div style='{bg_style} padding:25px;border-radius:18px;margin-bottom:20px;'>
+
+            <!-- NUMERACAO + NOME DESTACADO -->
             <div style='display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;'>
-                <div>
-                    <span style='color:{cor};font-size:24px;font-weight:bold;'>{ico["projeto"]}</span>
-                    <span style='background:#1a1a1a;color:{cor};padding:4px 12px;border-radius:20px;font-size:13px;font-weight:bold;margin-left:10px;border:1px solid {cor};'>{ico["token"]}</span>
-                    <span style='background:{cor}22;color:{cor};padding:4px 12px;border-radius:20px;font-size:12px;font-weight:bold;margin-left:8px;'>{badge}</span>
-                    <span style='background:{c_risco}22;color:{c_risco};padding:4px 10px;border-radius:20px;font-size:11px;margin-left:8px;border:1px solid {c_risco};'>Risco: {ico.get("risco","N/A")}</span>
+                <div style='display:flex;align-items:center;gap:15px;flex-wrap:wrap;'>
+
+                    <!-- NUMERO -->
+                    <div style='background:{cor}22;border:2px solid {cor};border-radius:50%;
+                                width:48px;height:48px;display:flex;align-items:center;
+                                justify-content:center;font-size:20px;font-weight:bold;
+                                color:{cor};flex-shrink:0;'>
+                        {numero_ico}
+                    </div>
+
+                    <!-- NOME + TOKEN + BADGES -->
+                    <div>
+                        <div style='display:flex;align-items:center;gap:10px;flex-wrap:wrap;'>
+                            <span style='color:#FFFFFF;font-size:26px;font-weight:900;
+                                         text-shadow:0 0 15px {cor};letter-spacing:1px;'>
+                                {ico["projeto"]}
+                            </span>
+                            <span style='background:{cor};color:#000;padding:4px 14px;
+                                          border-radius:20px;font-size:13px;font-weight:900;'>
+                                {ico["token"]}
+                            </span>
+                            <span style='background:{cor}22;color:{cor};padding:4px 12px;
+                                          border-radius:20px;font-size:12px;font-weight:bold;
+                                          border:1px solid {cor};'>
+                                {badge}
+                            </span>
+                            <span style='background:{c_risco}22;color:{c_risco};padding:4px 10px;
+                                          border-radius:20px;font-size:11px;
+                                          border:1px solid {c_risco};'>
+                                ⚠ Risco: {ico.get("risco","N/A")}
+                            </span>
+                        </div>
+                        <div style='color:#888;font-size:12px;margin-top:5px;'>
+                            📅 {ico.get("tge_str","N/A")} &nbsp;|&nbsp; {hora_brt} &nbsp;|&nbsp; {hora_utc_str} &nbsp;|&nbsp; {ico.get("categoria","N/A")}
+                        </div>
+                    </div>
                 </div>
+
+                <!-- COUNTDOWN -->
                 <div style='text-align:right;'>
                     <div class='countdown-big' style='color:{cor};'>{tempo_str}</div>
-                    <div style='color:#888;font-size:13px;'>{hora_brt} | {hora_utc}</div>
+                    <div style='color:#888;font-size:12px;margin-top:4px;'>⏱ Contagem Regressiva</div>
                 </div>
             </div>
+
             <hr style='border:none;border-top:1px solid {cor}33;margin:15px 0;'>
-            <div style='display:grid;grid-template-columns:repeat(4,1fr);gap:15px;margin-bottom:15px;'>
-                <div style='background:#00000066;padding:12px;border-radius:10px;border:1px solid #333;'>
-                    <p style='color:#888;font-size:11px;margin:0;'>TIPO</p>
-                    <p style='color:#FFF;font-size:14px;font-weight:bold;margin:3px 0;'>{ico["tipo"]}</p>
+
+            <!-- DADOS PRINCIPAIS -->
+            <div style='display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:12px;'>
+                <div style='background:#00000066;padding:12px;border-radius:10px;border:1px solid #222;'>
+                    <p style='color:#888;font-size:10px;margin:0;text-transform:uppercase;'>TIPO</p>
+                    <p style='color:#FFF;font-size:14px;font-weight:bold;margin:4px 0 0;'>{ico["tipo"]}</p>
                 </div>
-                <div style='background:#00000066;padding:12px;border-radius:10px;border:1px solid #333;'>
-                    <p style='color:#888;font-size:11px;margin:0;'>PRECO TGE</p>
-                    <p style='color:#00FF00;font-size:14px;font-weight:bold;margin:3px 0;'>{ico["preco"]}</p>
-                    <p style='color:#555;font-size:11px;margin:0;'>Listing: {ico["preco_listing"]}</p>
+                <div style='background:#00000066;padding:12px;border-radius:10px;border:1px solid #222;'>
+                    <p style='color:#888;font-size:10px;margin:0;text-transform:uppercase;'>PRECO TGE</p>
+                    <p style='color:#00FF00;font-size:16px;font-weight:bold;margin:4px 0 0;'>{ico["preco"]}</p>
+                    <p style='color:#555;font-size:11px;margin:2px 0 0;'>Listing: {ico["preco_listing"]}</p>
                 </div>
-                <div style='background:#00000066;padding:12px;border-radius:10px;border:1px solid #333;'>
-                    <p style='color:#888;font-size:11px;margin:0;'>FDV</p>
-                    <p style='color:#FFD700;font-size:14px;font-weight:bold;margin:3px 0;'>{ico["fdv"]}</p>
-                    <p style='color:#555;font-size:11px;margin:0;'>Raised: {ico["raised"]}</p>
+                <div style='background:#00000066;padding:12px;border-radius:10px;border:1px solid #222;'>
+                    <p style='color:#888;font-size:10px;margin:0;text-transform:uppercase;'>FDV / RAISED</p>
+                    <p style='color:#FFD700;font-size:16px;font-weight:bold;margin:4px 0 0;'>{ico["fdv"]}</p>
+                    <p style='color:#555;font-size:11px;margin:2px 0 0;'>Raised: {ico["raised"]}</p>
                 </div>
-                <div style='background:#00000066;padding:12px;border-radius:10px;border:1px solid #333;'>
-                    <p style='color:#888;font-size:11px;margin:0;'>SCORE</p>
-                    <p style='color:{cor};font-size:14px;font-weight:bold;margin:3px 0;'>{ico["score"]}</p>
-                    <p style='color:#FFD700;font-size:11px;margin:0;'>{estrelas[:10]}</p>
-                </div>
-            </div>
-            <div style='display:grid;grid-template-columns:repeat(3,1fr);gap:15px;margin-bottom:15px;'>
-                <div style='background:#00000066;padding:12px;border-radius:10px;border:1px solid #333;'>
-                    <p style='color:#888;font-size:11px;margin:0;'>PLATAFORMAS</p>
-                    <p style='color:#00FFFF;font-size:13px;margin:3px 0;'>{ico["plataformas"]}</p>
-                </div>
-                <div style='background:#00000066;padding:12px;border-radius:10px;border:1px solid #333;'>
-                    <p style='color:#888;font-size:11px;margin:0;'>BACKERS</p>
-                    <p style='color:#FFD700;font-size:13px;margin:3px 0;'>{ico["backers"]}</p>
-                </div>
-                <div style='background:#00000066;padding:12px;border-radius:10px;border:1px solid #333;'>
-                    <p style='color:#888;font-size:11px;margin:0;'>UNLOCK / VESTING</p>
-                    <p style='color:#FF8C00;font-size:13px;margin:3px 0;'>{ico["unlock"]}</p>
-                    <p style='color:#888;font-size:11px;margin:0;'>Categoria: {ico["categoria"]}</p>
+                <div style='background:#00000066;padding:12px;border-radius:10px;border:1px solid #222;'>
+                    <p style='color:#888;font-size:10px;margin:0;text-transform:uppercase;'>SCORE</p>
+                    <p style='color:{cor};font-size:16px;font-weight:bold;margin:4px 0 0;'>{ico["score"]}</p>
+                    <p style='color:#FFD700;font-size:11px;margin:2px 0 0;'>{estrelas[:10]}</p>
                 </div>
             </div>
-            <div style='display:grid;grid-template-columns:2fr 1fr;gap:15px;margin-bottom:15px;'>
-                <div style='background:#00000066;padding:12px;border-radius:10px;border-left:3px solid {cor};'>
-                    <p style='color:#888;font-size:11px;margin:0;'>ANALISE FUNDAMENTALISTA</p>
-                    <p style='color:#CCC;font-size:13px;margin:5px 0;'>{ico["descricao"]}</p>
+
+            <!-- DADOS SECUNDARIOS -->
+            <div style='display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:12px;'>
+                <div style='background:#00000066;padding:12px;border-radius:10px;border:1px solid #222;'>
+                    <p style='color:#888;font-size:10px;margin:0;text-transform:uppercase;'>PLATAFORMAS</p>
+                    <p style='color:#00FFFF;font-size:13px;margin:4px 0 0;'>{ico["plataformas"]}</p>
                 </div>
-                <div style='background:#00000066;padding:12px;border-radius:10px;border:1px solid #333;text-align:center;'>
-                    <p style='color:#888;font-size:11px;margin:0;'>ROI ALVO</p>
-                    <p style='color:#00FF00;font-size:20px;font-weight:bold;margin:8px 0;'>{ico["roi_alvo"]}</p>
-                    <p style='color:#555;font-size:11px;margin:0;'>R$400 investidos</p>
+                <div style='background:#00000066;padding:12px;border-radius:10px;border:1px solid #222;'>
+                    <p style='color:#888;font-size:10px;margin:0;text-transform:uppercase;'>BACKERS</p>
+                    <p style='color:#FFD700;font-size:13px;margin:4px 0 0;'>{ico["backers"]}</p>
+                </div>
+                <div style='background:#00000066;padding:12px;border-radius:10px;border:1px solid #222;'>
+                    <p style='color:#888;font-size:10px;margin:0;text-transform:uppercase;'>UNLOCK / VESTING</p>
+                    <p style='color:#FF8C00;font-size:13px;margin:4px 0 0;'>{ico["unlock"]}</p>
                 </div>
             </div>
+
+            <!-- ANALISE + ROI -->
+            <div style='display:grid;grid-template-columns:2fr 1fr;gap:12px;margin-bottom:15px;'>
+                <div style='background:#00000066;padding:14px;border-radius:10px;border-left:3px solid {cor};'>
+                    <p style='color:#888;font-size:10px;margin:0;text-transform:uppercase;'>Analise Fundamentalista</p>
+                    <p style='color:#DDD;font-size:13px;margin:6px 0 0;line-height:1.5;'>{ico["descricao"]}</p>
+                </div>
+                <div style='background:#00000066;padding:14px;border-radius:10px;border:1px solid #222;text-align:center;'>
+                    <p style='color:#888;font-size:10px;margin:0;text-transform:uppercase;'>ROI ALVO</p>
+                    <p style='color:#00FF00;font-size:24px;font-weight:900;margin:8px 0;'>{ico["roi_alvo"]}</p>
+                    <p style='color:#555;font-size:11px;margin:0;'>sobre R$400 investidos</p>
+                </div>
+            </div>
+
+            <!-- BOTOES -->
             <a href='{ico["link"]}' target='_blank' class='link-button'>{botao_comprar}</a>
-            <a href='{ico["link_info"]}' target='_blank' class='link-button-green'>PESQUISAR PROJETO</a>
+            <a href='{ico["link_info"]}' target='_blank' class='link-button-green'>🔍 PESQUISAR PROJETO</a>
             {tag_encerrado}
         </div>
         """, unsafe_allow_html=True)
@@ -477,30 +522,31 @@ with t6:
     if not encontrou:
         st.markdown(f"""
         <div style='text-align:center;padding:60px;border:2px dashed #333;border-radius:15px;'>
-            <h2 style='color:#555;'>Nenhum ICO encontrado</h2>
+            <h2 style='color:#555;'>📭 Nenhum ICO encontrado</h2>
             <p style='color:#444;'>Periodo: {data_inicio} ate {data_fim}</p>
+            <p style='color:#444;'>Amplie o intervalo ou ajuste os filtros.</p>
         </div>""", unsafe_allow_html=True)
 
     st.divider()
     st.markdown("""
     <div style='background:linear-gradient(135deg,#050505,#0a0500);border:2px solid #FFD700;padding:25px;border-radius:15px;'>
-        <h3 style='color:#FFD700;text-align:center;'>POR QUE ICOs MULTIPLICAM CAPITAL?</h3>
-        <div style='display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:20px;margin-top:15px;'>
+        <h3 style='color:#FFD700;text-align:center;margin-bottom:20px;'>💡 POR QUE ICOs MULTIPLICAM CAPITAL?</h3>
+        <div style='display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:20px;'>
             <div style='border-left:3px solid #00FF00;padding-left:12px;'>
                 <p style='color:#00FF00;font-weight:bold;margin:0;'>ENTRADA ANTECIPADA</p>
-                <p style='color:#AAA;font-size:12px;'>Preco TGE sempre menor que listing.</p>
+                <p style='color:#AAA;font-size:12px;margin:5px 0;'>Preco TGE sempre menor que listing. Voce compra antes de 99% do mercado.</p>
             </div>
             <div style='border-left:3px solid #FFD700;padding-left:12px;'>
                 <p style='color:#FFD700;font-weight:bold;margin:0;'>BACKERS = LISTING</p>
-                <p style='color:#AAA;font-size:12px;'>Circle, a16z garantem listagens Binance/Coinbase.</p>
+                <p style='color:#AAA;font-size:12px;margin:5px 0;'>Circle, a16z garantem listagens Binance/Coinbase e liquidez imediata.</p>
             </div>
             <div style='border-left:3px solid #00FFFF;padding-left:12px;'>
                 <p style='color:#00FFFF;font-weight:bold;margin:0;'>FDV BAIXO = UPSIDE</p>
-                <p style='color:#AAA;font-size:12px;'>FDV $39M vs Worldcoin $2B = 50x room.</p>
+                <p style='color:#AAA;font-size:12px;margin:5px 0;'>FDV $39M vs Worldcoin $2B = 50x de room. Menor FDV = maior potencial.</p>
             </div>
             <div style='border-left:3px solid #FF8C00;padding-left:12px;'>
                 <p style='color:#FF8C00;font-weight:bold;margin:0;'>ROI R$400</p>
-                <p style='color:#AAA;font-size:12px;'>x$0.39 = R$4.000 (10X) | x$1.00 = R$10.000 (25X)</p>
+                <p style='color:#AAA;font-size:12px;margin:5px 0;'>x$0.39 = R$4.000 (10X) | x$1.00 = R$10.000 (25X)</p>
             </div>
         </div>
     </div>""", unsafe_allow_html=True)
@@ -515,7 +561,7 @@ with t7:
     with ca:
         st.markdown("""
         <div class='premium-card'>
-            <h3 style='color:#FFD700;'>Caca-Lancamentos</h3>
+            <h3 style='color:#FFD700;'>🛰️ Caca-Lancamentos</h3>
             <a href='https://daomaker.com/' class='link-button'>DAO Maker</a>
             <a href='https://seedify.fund/' class='link-button'>Seedify</a>
             <a href='https://jup.ag/' class='link-button'>Jupiter</a>
@@ -523,20 +569,20 @@ with t7:
             <div class='step-box'><b>Dica:</b> Monitore #TGE e #MainnetLaunch no X.</div>
         </div>
         <div class='premium-card'>
-            <h3 style='color:#FFD700;'>Analise Social</h3>
+            <h3 style='color:#FFD700;'>📊 Analise Social</h3>
             <a href='https://lunarcrush.com/' class='link-button'>LunarCrush</a>
             <a href='https://coinmarketcal.com' class='link-button'>CoinMarketCal</a>
         </div>""", unsafe_allow_html=True)
     with cb:
         st.markdown("""
         <div class='premium-card'>
-            <h3 style='color:#FFD700;'>Seguranca Anti-Rugpull</h3>
+            <h3 style='color:#FFD700;'>🛡️ Seguranca Anti-Rugpull</h3>
             <a href='https://tokensniffer.com/' class='link-button'>Token Sniffer</a>
             <a href='https://dexscreener.com/' class='link-button'>DEX Screener</a>
-            <div class='step-box'>Verifique liquidez travada antes de comprar.</div>
+            <div class='step-box'>Verifique liquidez travada e honeypot antes de comprar.</div>
         </div>
         <div class='premium-card'>
-            <h3 style='color:#FFD700;'>Regras Sniper</h3>
+            <h3 style='color:#FFD700;'>⚖️ Regras Sniper</h3>
             <ul>
                 <li>Nunca entre apos pump +100% no dia</li>
                 <li>FDV abaixo de $50M = oportunidade</li>
