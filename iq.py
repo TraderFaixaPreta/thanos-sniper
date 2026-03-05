@@ -46,13 +46,13 @@ def formatar_tempo(delta):
     return f"{horas:02}h {mins:02}m {secs:02}s"
 
 def cor_status(status):
-    return {"critico":"#FF0000","urgente":"#FF8C00","normal":"#00FF00","finalizado":"#666666","unknown":"#444444"}.get(status,"#00FF00")
+    return {"critico":"#FF4444","urgente":"#FF8C00","normal":"#00FF00","finalizado":"#888888","unknown":"#555555"}.get(status,"#00FF00")
 
 def badge_status(status):
-    return {"critico":"🔴 CRITICO - MENOS DE 1H","urgente":"🟠 URGENTE - HOJE","normal":"🟢 UPCOMING","finalizado":"⚫ FINALIZADO","unknown":"⚪ A CONFIRMAR"}.get(status,"🟢 UPCOMING")
+    return {"critico":"🔴 CRITICO","urgente":"🟠 URGENTE - HOJE","normal":"🟢 UPCOMING","finalizado":"⚫ FINALIZADO","unknown":"⚪ A CONFIRMAR"}.get(status,"🟢 UPCOMING")
 
 def cor_risco(risco):
-    return {"BAIXO":"#00FF00","MEDIO":"#FF8C00","ALTO":"#FF0000"}.get(risco,"#FFF")
+    return {"BAIXO":"#00FF00","MEDIO":"#FF8C00","ALTO":"#FF4444"}.get(risco,"#FFFFFF")
 
 def estrelas_score(score_str):
     try:
@@ -99,7 +99,6 @@ def carregar_mercado():
     try:
         r = requests.get(url, timeout=15)
         df = pd.DataFrame(r.json())
-        # ✅ GARANTE TODAS AS COLUNAS NECESSARIAS
         colunas_necessarias = [
             'image','symbol','name','current_price','price_change_percentage_24h',
             'market_cap','total_volume','atl','atl_date','sparkline_in_7d','market_cap_rank'
@@ -118,7 +117,7 @@ def carregar_mercado():
             df['atl_date'], errors='coerce'
         ).dt.strftime('%d/%m/%Y')
         return df.fillna(0)
-    except Exception as e:
+    except:
         return pd.DataFrame()
 
 @st.cache_data(ttl=180)
@@ -229,18 +228,56 @@ def carregar_icos():
 
 df = carregar_mercado()
 
+# ✅ CSS CORRIGIDO — removido seletor destrutivo que sobrescrevia cores inline
 st.markdown("""
 <style>
-.stApp{background:#000;color:#00FF00;}
-[data-testid="stSidebar"]{background:#050505!important;border-right:2px solid #8A2BE2;}
-h1,h2,h3,p,span,label,div{color:#00FF00!important;font-family:'Consolas',monospace;}
-.thanos-title{text-align:center;font-size:60px;font-weight:bold;color:#FFD700!important;text-shadow:0 0 30px #8A2BE2;}
-.premium-card{background:#0a0a0a;border:1px solid #FFD700;padding:20px;border-radius:15px;margin-bottom:15px;box-shadow:0 0 15px rgba(138,43,226,0.5);}
-.link-button{display:inline-block;padding:8px 15px;background:#8A2BE2;color:white!important;text-decoration:none;border-radius:5px;font-weight:bold;margin:5px 5px 0 0;}
-.link-button-green{display:inline-block;padding:8px 15px;background:#006600;color:white!important;text-decoration:none;border-radius:5px;font-weight:bold;margin:5px 5px 0 0;}
-.metric-card{background:#0a0a0a;border:2px solid #FFD700;padding:25px;border-radius:15px;text-align:center;margin-top:10px;}
-.step-box{border-left:3px solid #00FFFF;padding-left:15px;margin-top:10px;}
-.countdown-big{font-size:32px;font-weight:bold;font-family:'Consolas',monospace;letter-spacing:2px;}
+body, .stApp { background-color: #000 !important; }
+[data-testid="stSidebar"] { background: #050505 !important; border-right: 2px solid #8A2BE2; }
+
+/* Fonte global sem forçar cor — cores ficam no inline */
+* { font-family: 'Consolas', monospace !important; }
+
+/* Apenas elementos fora dos cards herdam verde */
+.stApp > header, .stTabs [data-baseweb="tab"] { color: #00FF00 !important; }
+section[data-testid="stSidebar"] * { color: #00FF00 !important; }
+
+.thanos-title {
+    text-align: center; font-size: 60px; font-weight: bold;
+    color: #FFD700 !important; text-shadow: 0 0 30px #8A2BE2;
+}
+.link-btn {
+    display: inline-block; padding: 9px 18px; background: #8A2BE2;
+    color: #FFF !important; text-decoration: none; border-radius: 6px;
+    font-weight: bold; margin: 5px 5px 0 0; font-size: 13px;
+}
+.link-btn-green {
+    display: inline-block; padding: 9px 18px; background: #006600;
+    color: #FFF !important; text-decoration: none; border-radius: 6px;
+    font-weight: bold; margin: 5px 5px 0 0; font-size: 13px;
+}
+.premium-card {
+    background: #0a0a0a; border: 1px solid #FFD700; padding: 20px;
+    border-radius: 15px; margin-bottom: 15px;
+    box-shadow: 0 0 15px rgba(138,43,226,0.5);
+    color: #00FF00 !important;
+}
+.metric-card {
+    background: #0a0a0a; border: 2px solid #FFD700; padding: 25px;
+    border-radius: 15px; text-align: center; margin-top: 10px;
+}
+.step-box { border-left: 3px solid #00FFFF; padding-left: 15px; margin-top: 10px; }
+.countdown-big {
+    font-size: 30px; font-weight: bold;
+    font-family: 'Consolas', monospace; letter-spacing: 2px;
+}
+
+/* Card ICO — todos os textos internos sem !important para respeitar inline */
+.ico-card { border-radius: 18px; padding: 22px; margin-bottom: 22px; }
+.ico-label { font-size: 10px; color: #888; text-transform: uppercase; margin: 0; }
+.ico-info-box {
+    background: rgba(0,0,0,0.4); padding: 12px;
+    border-radius: 10px; border: 1px solid #222;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -273,7 +310,6 @@ t1, t2, t3, t4, t5, t6, t7 = st.tabs([
     "🆕 LISTAGENS", "🔮 SIMULADOR", "🎯 ICO RADAR", "📖 MANUAL"
 ])
 
-# ✅ T1 - CORRIGIDO KeyError
 with t1:
     if not df.empty:
         cols_t1 = [c for c in ['image','market_cap_rank','name','symbol','current_price','price_change_percentage_24h'] if c in df.columns]
@@ -281,7 +317,6 @@ with t1:
     else:
         st.warning("Dados do mercado indisponiveis.")
 
-# ✅ T2 - CORRIGIDO KeyError
 with t2:
     if not df.empty:
         df_f = df[(df['current_price'].fillna(999) <= f_p) & (df['whale_activity'].fillna(0) >= f_w)]
@@ -290,7 +325,6 @@ with t2:
     else:
         st.warning("Dados indisponiveis.")
 
-# ✅ T3 - CORRIGIDO KeyError
 with t3:
     if not df.empty:
         cols_t3 = [c for c in ['name','symbol','total_volume','whale_activity'] if c in df.columns]
@@ -298,7 +332,6 @@ with t3:
     else:
         st.warning("Dados indisponiveis.")
 
-# ✅ T4 - CORRIGIDO KeyError
 with t4:
     if not df.empty:
         df_new = df.sort_values(by='atl_date', ascending=False).head(50)
@@ -320,21 +353,27 @@ with t5:
                 res = (v_sim / atl) * float(d['current_price'])
                 st.markdown(f"""
                 <div class='metric-card'>
-                    <h1 style='color:#00FF00;'>${res:,.2f}</h1>
-                    <p>ATL: ${atl:.8f} | Data: {d['data_listagem']}</p>
+                    <h1 style='color:#00FF00;font-size:48px;margin:0;'>${res:,.2f}</h1>
+                    <p style='color:#888;margin:8px 0 0;'>ATL: ${atl:.8f} &nbsp;|&nbsp; Data: {d['data_listagem']}</p>
                 </div>""", unsafe_allow_html=True)
 
 # ============================================================
-# ✅ T6 - ICO RADAR COMPLETO COM NUMERAÇÃO E NOME DESTACADO
+# T6 — ICO RADAR  ✅ CSS ISOLADO, CORES INLINE FUNCIONANDO
 # ============================================================
 with t6:
-    st.markdown("<h2 style='color:#FFD700;text-align:center;'>🎯 ICO RADAR — CENTRAL DE LANÇAMENTOS</h2>", unsafe_allow_html=True)
+    st.markdown("""
+    <div style='text-align:center;padding:10px 0 5px;'>
+        <span style='color:#FFD700;font-size:28px;font-weight:900;letter-spacing:2px;'>
+            🎯 ICO RADAR — CENTRAL DE LANÇAMENTOS
+        </span>
+    </div>""", unsafe_allow_html=True)
+
     hoje_utc = datetime.now(timezone.utc)
     icos = carregar_icos()
 
-    total = len(icos)
-    hoje_count = sum(1 for i in icos if i.get("tge_dt") and i["tge_dt"].date() == hoje_utc.date())
-    urgentes = sum(1 for i in icos if calcular_tempo(i.get("tge_dt"))[1] in ["critico","urgente"])
+    total     = len(icos)
+    hoje_count= sum(1 for i in icos if i.get("tge_dt") and i["tge_dt"].date() == hoje_utc.date())
+    urgentes  = sum(1 for i in icos if calcular_tempo(i.get("tge_dt"))[1] in ["critico","urgente"])
     finalizados = sum(1 for i in icos if calcular_tempo(i.get("tge_dt"))[1] == "finalizado")
 
     m1, m2, m3, m4 = st.columns(4)
@@ -348,7 +387,7 @@ with t6:
 
     col1, col2, col3, col4, col5 = st.columns(5)
     with col1: data_inicio = st.date_input("De:", value=hoje_utc.date())
-    with col2: data_fim = st.date_input("Ate:", value=hoje_utc.date() + timedelta(days=30))
+    with col2: data_fim    = st.date_input("Ate:", value=hoje_utc.date() + timedelta(days=30))
     with col3:
         filtro_status = st.multiselect("Status:",
             ["finalizado","critico","urgente","normal"],
@@ -373,9 +412,9 @@ with t6:
 
     st.divider()
 
-    # ✅ NUMERAÇÃO + NOME DESTACADO
-    encontrou = False
-    numero_ico = 0
+    encontrou   = False
+    numero_ico  = 0
+
     for ico in icos:
         delta, status = calcular_tempo(ico.get("tge_dt"))
         tge_dt = ico.get("tge_dt")
@@ -383,172 +422,173 @@ with t6:
         if status not in filtro_status: continue
         if ico.get("risco","MEDIO") not in filtro_risco: continue
 
-        encontrou = True
+        encontrou  = True
         numero_ico += 1
-        cor = cor_status(status)
-        badge = badge_status(status)
-        tempo_str = formatar_tempo(delta)
-        hora_utc_str = tge_dt.strftime("%H:%M UTC") if tge_dt else "N/A"
-        hora_brt = ico.get("hora_brt","N/A")
-        c_risco = cor_risco(ico.get("risco","MEDIO"))
-        estrelas = estrelas_score(ico.get("score","N/A"))
+        cor        = cor_status(status)
+        badge      = badge_status(status)
+        tempo_str  = formatar_tempo(delta)
+        hora_utc_s = tge_dt.strftime("%H:%M UTC") if tge_dt else "N/A"
+        hora_brt   = ico.get("hora_brt","N/A")
+        c_risco    = cor_risco(ico.get("risco","MEDIO"))
+        estrelas   = estrelas_score(ico.get("score","N/A"))
 
-        bg_map = {
-            "critico":   "background:linear-gradient(135deg,#1a0000,#0d0000);border:2px solid #FF0000;box-shadow:0 0 30px #FF000066;",
-            "urgente":   "background:linear-gradient(135deg,#1a0800,#0d0500);border:2px solid #FF8C00;box-shadow:0 0 25px #FF8C0066;",
-            "normal":    "background:linear-gradient(135deg,#001a00,#000d00);border:2px solid #00FF00;box-shadow:0 0 20px #00FF0033;",
-            "finalizado":"background:#0a0a0a;border:2px solid #333;opacity:0.8;"
-        }
-        bg_style = bg_map.get(status, bg_map["normal"])
-        botao_comprar = "ENCERRADO" if status == "finalizado" else "COMPRAR AGORA"
-        tag_encerrado = (
-            f"<span style='background:#FF000033;color:#FF0000;padding:8px 15px;"
-            f"border-radius:5px;font-size:13px;font-weight:bold;margin-left:5px;"
-            f"border:1px solid #FF0000;'>✖ VENDA ENCERRADA — {hora_brt}</span>"
-            if status == "finalizado" else ""
-        )
+        # Bordas e fundo por status
+        borda_cor = cor
+        if status == "finalizado":
+            card_bg = "background:#0d0d0d;"
+        elif status == "critico":
+            card_bg = "background:linear-gradient(135deg,#1a0000,#0d0000);"
+        elif status == "urgente":
+            card_bg = "background:linear-gradient(135deg,#1a0800,#0d0500);"
+        else:
+            card_bg = "background:linear-gradient(135deg,#001a00,#000d00);"
+
+        botao_texto = "ENCERRADO" if status == "finalizado" else "COMPRAR AGORA"
+        tag_enc = (
+            f"<span style='background:rgba(255,68,68,0.15);color:#FF4444;"
+            f"padding:8px 14px;border-radius:6px;font-size:12px;font-weight:bold;"
+            f"border:1px solid #FF4444;margin-left:8px;'>"
+            f"✖ VENDA ENCERRADA — {hora_brt}</span>"
+        ) if status == "finalizado" else ""
 
         st.markdown(f"""
-        <div style='{bg_style} padding:25px;border-radius:18px;margin-bottom:20px;'>
+<div style='{card_bg} border:2px solid {borda_cor};border-radius:16px;
+            padding:22px;margin-bottom:20px;
+            box-shadow:0 0 20px {borda_cor}33;'>
 
-            <!-- NUMERACAO + NOME DESTACADO -->
-            <div style='display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;'>
-                <div style='display:flex;align-items:center;gap:15px;flex-wrap:wrap;'>
+  <!-- LINHA 1: NUMERO + NOME + COUNTDOWN -->
+  <div style='display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;'>
 
-                    <!-- NUMERO -->
-                    <div style='background:{cor}22;border:2px solid {cor};border-radius:50%;
-                                width:48px;height:48px;display:flex;align-items:center;
-                                justify-content:center;font-size:20px;font-weight:bold;
-                                color:{cor};flex-shrink:0;'>
-                        {numero_ico}
-                    </div>
+    <div style='display:flex;align-items:center;gap:14px;flex-wrap:wrap;'>
+      <!-- Numero circulo -->
+      <div style='width:50px;height:50px;border-radius:50%;border:2px solid {cor};
+                  background:rgba(0,0,0,0.5);display:flex;align-items:center;
+                  justify-content:center;flex-shrink:0;'>
+        <span style='color:{cor};font-size:22px;font-weight:900;'>{numero_ico}</span>
+      </div>
 
-                    <!-- NOME + TOKEN + BADGES -->
-                    <div>
-                        <div style='display:flex;align-items:center;gap:10px;flex-wrap:wrap;'>
-                            <span style='color:#FFFFFF;font-size:26px;font-weight:900;
-                                         text-shadow:0 0 15px {cor};letter-spacing:1px;'>
-                                {ico["projeto"]}
-                            </span>
-                            <span style='background:{cor};color:#000;padding:4px 14px;
-                                          border-radius:20px;font-size:13px;font-weight:900;'>
-                                {ico["token"]}
-                            </span>
-                            <span style='background:{cor}22;color:{cor};padding:4px 12px;
-                                          border-radius:20px;font-size:12px;font-weight:bold;
-                                          border:1px solid {cor};'>
-                                {badge}
-                            </span>
-                            <span style='background:{c_risco}22;color:{c_risco};padding:4px 10px;
-                                          border-radius:20px;font-size:11px;
-                                          border:1px solid {c_risco};'>
-                                ⚠ Risco: {ico.get("risco","N/A")}
-                            </span>
-                        </div>
-                        <div style='color:#888;font-size:12px;margin-top:5px;'>
-                            📅 {ico.get("tge_str","N/A")} &nbsp;|&nbsp; {hora_brt} &nbsp;|&nbsp; {hora_utc_str} &nbsp;|&nbsp; {ico.get("categoria","N/A")}
-                        </div>
-                    </div>
-                </div>
-
-                <!-- COUNTDOWN -->
-                <div style='text-align:right;'>
-                    <div class='countdown-big' style='color:{cor};'>{tempo_str}</div>
-                    <div style='color:#888;font-size:12px;margin-top:4px;'>⏱ Contagem Regressiva</div>
-                </div>
-            </div>
-
-            <hr style='border:none;border-top:1px solid {cor}33;margin:15px 0;'>
-
-            <!-- DADOS PRINCIPAIS -->
-            <div style='display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:12px;'>
-                <div style='background:#00000066;padding:12px;border-radius:10px;border:1px solid #222;'>
-                    <p style='color:#888;font-size:10px;margin:0;text-transform:uppercase;'>TIPO</p>
-                    <p style='color:#FFF;font-size:14px;font-weight:bold;margin:4px 0 0;'>{ico["tipo"]}</p>
-                </div>
-                <div style='background:#00000066;padding:12px;border-radius:10px;border:1px solid #222;'>
-                    <p style='color:#888;font-size:10px;margin:0;text-transform:uppercase;'>PRECO TGE</p>
-                    <p style='color:#00FF00;font-size:16px;font-weight:bold;margin:4px 0 0;'>{ico["preco"]}</p>
-                    <p style='color:#555;font-size:11px;margin:2px 0 0;'>Listing: {ico["preco_listing"]}</p>
-                </div>
-                <div style='background:#00000066;padding:12px;border-radius:10px;border:1px solid #222;'>
-                    <p style='color:#888;font-size:10px;margin:0;text-transform:uppercase;'>FDV / RAISED</p>
-                    <p style='color:#FFD700;font-size:16px;font-weight:bold;margin:4px 0 0;'>{ico["fdv"]}</p>
-                    <p style='color:#555;font-size:11px;margin:2px 0 0;'>Raised: {ico["raised"]}</p>
-                </div>
-                <div style='background:#00000066;padding:12px;border-radius:10px;border:1px solid #222;'>
-                    <p style='color:#888;font-size:10px;margin:0;text-transform:uppercase;'>SCORE</p>
-                    <p style='color:{cor};font-size:16px;font-weight:bold;margin:4px 0 0;'>{ico["score"]}</p>
-                    <p style='color:#FFD700;font-size:11px;margin:2px 0 0;'>{estrelas[:10]}</p>
-                </div>
-            </div>
-
-            <!-- DADOS SECUNDARIOS -->
-            <div style='display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:12px;'>
-                <div style='background:#00000066;padding:12px;border-radius:10px;border:1px solid #222;'>
-                    <p style='color:#888;font-size:10px;margin:0;text-transform:uppercase;'>PLATAFORMAS</p>
-                    <p style='color:#00FFFF;font-size:13px;margin:4px 0 0;'>{ico["plataformas"]}</p>
-                </div>
-                <div style='background:#00000066;padding:12px;border-radius:10px;border:1px solid #222;'>
-                    <p style='color:#888;font-size:10px;margin:0;text-transform:uppercase;'>BACKERS</p>
-                    <p style='color:#FFD700;font-size:13px;margin:4px 0 0;'>{ico["backers"]}</p>
-                </div>
-                <div style='background:#00000066;padding:12px;border-radius:10px;border:1px solid #222;'>
-                    <p style='color:#888;font-size:10px;margin:0;text-transform:uppercase;'>UNLOCK / VESTING</p>
-                    <p style='color:#FF8C00;font-size:13px;margin:4px 0 0;'>{ico["unlock"]}</p>
-                </div>
-            </div>
-
-            <!-- ANALISE + ROI -->
-            <div style='display:grid;grid-template-columns:2fr 1fr;gap:12px;margin-bottom:15px;'>
-                <div style='background:#00000066;padding:14px;border-radius:10px;border-left:3px solid {cor};'>
-                    <p style='color:#888;font-size:10px;margin:0;text-transform:uppercase;'>Analise Fundamentalista</p>
-                    <p style='color:#DDD;font-size:13px;margin:6px 0 0;line-height:1.5;'>{ico["descricao"]}</p>
-                </div>
-                <div style='background:#00000066;padding:14px;border-radius:10px;border:1px solid #222;text-align:center;'>
-                    <p style='color:#888;font-size:10px;margin:0;text-transform:uppercase;'>ROI ALVO</p>
-                    <p style='color:#00FF00;font-size:24px;font-weight:900;margin:8px 0;'>{ico["roi_alvo"]}</p>
-                    <p style='color:#555;font-size:11px;margin:0;'>sobre R$400 investidos</p>
-                </div>
-            </div>
-
-            <!-- BOTOES -->
-            <a href='{ico["link"]}' target='_blank' class='link-button'>{botao_comprar}</a>
-            <a href='{ico["link_info"]}' target='_blank' class='link-button-green'>🔍 PESQUISAR PROJETO</a>
-            {tag_encerrado}
+      <!-- Nome e badges -->
+      <div>
+        <div style='display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px;'>
+          <span style='color:#FFFFFF;font-size:24px;font-weight:900;
+                       text-shadow:0 0 12px {cor};'>{ico["projeto"]}</span>
+          <span style='background:{cor};color:#000000;padding:3px 12px;
+                       border-radius:20px;font-size:13px;font-weight:900;'>{ico["token"]}</span>
+          <span style='background:rgba(0,0,0,0.4);color:{cor};padding:3px 10px;
+                       border-radius:20px;font-size:11px;border:1px solid {cor};'>{badge}</span>
+          <span style='background:rgba(0,0,0,0.4);color:{c_risco};padding:3px 10px;
+                       border-radius:20px;font-size:11px;border:1px solid {c_risco};'>
+            ⚠ {ico.get("risco","N/A")}</span>
         </div>
-        """, unsafe_allow_html=True)
+        <div style='color:#777;font-size:12px;'>
+          📅 {ico.get("tge_str","N/A")} &nbsp;·&nbsp; {hora_brt} &nbsp;·&nbsp; {hora_utc_s}
+          &nbsp;·&nbsp; {ico.get("categoria","N/A")}
+        </div>
+      </div>
+    </div>
+
+    <!-- Countdown -->
+    <div style='text-align:right;'>
+      <div style='color:{cor};font-size:28px;font-weight:900;
+                  font-family:Consolas,monospace;letter-spacing:2px;'>{tempo_str}</div>
+      <div style='color:#666;font-size:11px;margin-top:3px;'>⏱ Contagem Regressiva</div>
+    </div>
+  </div>
+
+  <div style='border-top:1px solid {cor}44;margin:14px 0;'></div>
+
+  <!-- LINHA 2: 4 BOXES DADOS PRINCIPAIS -->
+  <div style='display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:10px;'>
+    <div style='background:rgba(0,0,0,0.45);padding:11px;border-radius:9px;border:1px solid #1e1e1e;'>
+      <div style='color:#777;font-size:10px;text-transform:uppercase;margin-bottom:4px;'>TIPO</div>
+      <div style='color:#FFFFFF;font-size:14px;font-weight:bold;'>{ico["tipo"]}</div>
+    </div>
+    <div style='background:rgba(0,0,0,0.45);padding:11px;border-radius:9px;border:1px solid #1e1e1e;'>
+      <div style='color:#777;font-size:10px;text-transform:uppercase;margin-bottom:4px;'>PRECO TGE</div>
+      <div style='color:#00FF00;font-size:15px;font-weight:bold;'>{ico["preco"]}</div>
+      <div style='color:#555;font-size:11px;'>Listing: {ico["preco_listing"]}</div>
+    </div>
+    <div style='background:rgba(0,0,0,0.45);padding:11px;border-radius:9px;border:1px solid #1e1e1e;'>
+      <div style='color:#777;font-size:10px;text-transform:uppercase;margin-bottom:4px;'>FDV / RAISED</div>
+      <div style='color:#FFD700;font-size:15px;font-weight:bold;'>{ico["fdv"]}</div>
+      <div style='color:#555;font-size:11px;'>Raised: {ico["raised"]}</div>
+    </div>
+    <div style='background:rgba(0,0,0,0.45);padding:11px;border-radius:9px;border:1px solid #1e1e1e;'>
+      <div style='color:#777;font-size:10px;text-transform:uppercase;margin-bottom:4px;'>SCORE</div>
+      <div style='color:{cor};font-size:15px;font-weight:bold;'>{ico["score"]}</div>
+      <div style='color:#FFD700;font-size:11px;'>{estrelas[:10]}</div>
+    </div>
+  </div>
+
+  <!-- LINHA 3: 3 BOXES SECUNDARIOS -->
+  <div style='display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:10px;'>
+    <div style='background:rgba(0,0,0,0.45);padding:11px;border-radius:9px;border:1px solid #1e1e1e;'>
+      <div style='color:#777;font-size:10px;text-transform:uppercase;margin-bottom:4px;'>PLATAFORMAS</div>
+      <div style='color:#00FFFF;font-size:13px;'>{ico["plataformas"]}</div>
+    </div>
+    <div style='background:rgba(0,0,0,0.45);padding:11px;border-radius:9px;border:1px solid #1e1e1e;'>
+      <div style='color:#777;font-size:10px;text-transform:uppercase;margin-bottom:4px;'>BACKERS</div>
+      <div style='color:#FFD700;font-size:13px;'>{ico["backers"]}</div>
+    </div>
+    <div style='background:rgba(0,0,0,0.45);padding:11px;border-radius:9px;border:1px solid #1e1e1e;'>
+      <div style='color:#777;font-size:10px;text-transform:uppercase;margin-bottom:4px;'>UNLOCK / VESTING</div>
+      <div style='color:#FF8C00;font-size:13px;'>{ico["unlock"]}</div>
+    </div>
+  </div>
+
+  <!-- LINHA 4: ANALISE + ROI -->
+  <div style='display:grid;grid-template-columns:2fr 1fr;gap:10px;margin-bottom:14px;'>
+    <div style='background:rgba(0,0,0,0.45);padding:13px;border-radius:9px;border-left:3px solid {cor};'>
+      <div style='color:#777;font-size:10px;text-transform:uppercase;margin-bottom:6px;'>ANALISE FUNDAMENTALISTA</div>
+      <div style='color:#CCCCCC;font-size:13px;line-height:1.55;'>{ico["descricao"]}</div>
+    </div>
+    <div style='background:rgba(0,0,0,0.45);padding:13px;border-radius:9px;
+                border:1px solid #1e1e1e;text-align:center;'>
+      <div style='color:#777;font-size:10px;text-transform:uppercase;margin-bottom:6px;'>ROI ALVO</div>
+      <div style='color:#00FF00;font-size:26px;font-weight:900;margin:6px 0;'>{ico["roi_alvo"]}</div>
+      <div style='color:#555;font-size:11px;'>sobre R$400 investidos</div>
+    </div>
+  </div>
+
+  <!-- BOTOES -->
+  <a href='{ico["link"]}' target='_blank' class='link-btn'>{botao_texto}</a>
+  <a href='{ico["link_info"]}' target='_blank' class='link-btn-green'>🔍 PESQUISAR PROJETO</a>
+  {tag_enc}
+
+</div>""", unsafe_allow_html=True)
 
     if not encontrou:
         st.markdown(f"""
         <div style='text-align:center;padding:60px;border:2px dashed #333;border-radius:15px;'>
-            <h2 style='color:#555;'>📭 Nenhum ICO encontrado</h2>
-            <p style='color:#444;'>Periodo: {data_inicio} ate {data_fim}</p>
-            <p style='color:#444;'>Amplie o intervalo ou ajuste os filtros.</p>
+          <div style='color:#555;font-size:28px;'>📭 Nenhum ICO encontrado</div>
+          <div style='color:#444;margin-top:10px;'>Periodo: {data_inicio} ate {data_fim}</div>
         </div>""", unsafe_allow_html=True)
 
     st.divider()
     st.markdown("""
-    <div style='background:linear-gradient(135deg,#050505,#0a0500);border:2px solid #FFD700;padding:25px;border-radius:15px;'>
-        <h3 style='color:#FFD700;text-align:center;margin-bottom:20px;'>💡 POR QUE ICOs MULTIPLICAM CAPITAL?</h3>
-        <div style='display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:20px;'>
-            <div style='border-left:3px solid #00FF00;padding-left:12px;'>
-                <p style='color:#00FF00;font-weight:bold;margin:0;'>ENTRADA ANTECIPADA</p>
-                <p style='color:#AAA;font-size:12px;margin:5px 0;'>Preco TGE sempre menor que listing. Voce compra antes de 99% do mercado.</p>
-            </div>
-            <div style='border-left:3px solid #FFD700;padding-left:12px;'>
-                <p style='color:#FFD700;font-weight:bold;margin:0;'>BACKERS = LISTING</p>
-                <p style='color:#AAA;font-size:12px;margin:5px 0;'>Circle, a16z garantem listagens Binance/Coinbase e liquidez imediata.</p>
-            </div>
-            <div style='border-left:3px solid #00FFFF;padding-left:12px;'>
-                <p style='color:#00FFFF;font-weight:bold;margin:0;'>FDV BAIXO = UPSIDE</p>
-                <p style='color:#AAA;font-size:12px;margin:5px 0;'>FDV $39M vs Worldcoin $2B = 50x de room. Menor FDV = maior potencial.</p>
-            </div>
-            <div style='border-left:3px solid #FF8C00;padding-left:12px;'>
-                <p style='color:#FF8C00;font-weight:bold;margin:0;'>ROI R$400</p>
-                <p style='color:#AAA;font-size:12px;margin:5px 0;'>x$0.39 = R$4.000 (10X) | x$1.00 = R$10.000 (25X)</p>
-            </div>
+    <div style='background:linear-gradient(135deg,#050505,#0a0500);border:2px solid #FFD700;
+                padding:25px;border-radius:15px;'>
+      <div style='color:#FFD700;font-size:18px;font-weight:bold;text-align:center;margin-bottom:18px;'>
+        💡 POR QUE ICOs MULTIPLICAM CAPITAL?
+      </div>
+      <div style='display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:20px;'>
+        <div style='border-left:3px solid #00FF00;padding-left:12px;'>
+          <div style='color:#00FF00;font-weight:bold;margin-bottom:5px;'>ENTRADA ANTECIPADA</div>
+          <div style='color:#AAA;font-size:12px;'>Preco TGE sempre menor que listing.</div>
         </div>
+        <div style='border-left:3px solid #FFD700;padding-left:12px;'>
+          <div style='color:#FFD700;font-weight:bold;margin-bottom:5px;'>BACKERS = LISTING</div>
+          <div style='color:#AAA;font-size:12px;'>a16z garantem listagens Binance/Coinbase.</div>
+        </div>
+        <div style='border-left:3px solid #00FFFF;padding-left:12px;'>
+          <div style='color:#00FFFF;font-weight:bold;margin-bottom:5px;'>FDV BAIXO = UPSIDE</div>
+          <div style='color:#AAA;font-size:12px;'>FDV $39M vs Worldcoin $2B = 50x room.</div>
+        </div>
+        <div style='border-left:3px solid #FF8C00;padding-left:12px;'>
+          <div style='color:#FF8C00;font-weight:bold;margin-bottom:5px;'>ROI R$400</div>
+          <div style='color:#AAA;font-size:12px;'>x$1.00 = R$10.000 (25X)</div>
+        </div>
+      </div>
     </div>""", unsafe_allow_html=True)
 
     if auto_refresh:
@@ -556,34 +596,38 @@ with t6:
         st.rerun()
 
 with t7:
-    st.markdown("## 📖 Manual Estrategico Premium")
+    st.markdown("<div style='color:#FFD700;font-size:22px;font-weight:bold;margin-bottom:15px;'>📖 Manual Estrategico Premium</div>", unsafe_allow_html=True)
     ca, cb = st.columns(2)
     with ca:
         st.markdown("""
         <div class='premium-card'>
-            <h3 style='color:#FFD700;'>🛰️ Caca-Lancamentos</h3>
-            <a href='https://daomaker.com/' class='link-button'>DAO Maker</a>
-            <a href='https://seedify.fund/' class='link-button'>Seedify</a>
-            <a href='https://jup.ag/' class='link-button'>Jupiter</a>
-            <a href='https://icodrops.com' class='link-button'>ICO Drops</a>
-            <div class='step-box'><b>Dica:</b> Monitore #TGE e #MainnetLaunch no X.</div>
+            <div style='color:#FFD700;font-size:16px;font-weight:bold;margin-bottom:12px;'>🛰️ Caca-Lancamentos</div>
+            <a href='https://daomaker.com/' class='link-btn'>DAO Maker</a>
+            <a href='https://seedify.fund/' class='link-btn'>Seedify</a>
+            <a href='https://jup.ag/' class='link-btn'>Jupiter</a>
+            <a href='https://icodrops.com' class='link-btn'>ICO Drops</a>
+            <div class='step-box' style='margin-top:12px;color:#AAA;'>
+                <b style='color:#00FFFF;'>Dica:</b> Monitore #TGE e #MainnetLaunch no X.
+            </div>
         </div>
         <div class='premium-card'>
-            <h3 style='color:#FFD700;'>📊 Analise Social</h3>
-            <a href='https://lunarcrush.com/' class='link-button'>LunarCrush</a>
-            <a href='https://coinmarketcal.com' class='link-button'>CoinMarketCal</a>
+            <div style='color:#FFD700;font-size:16px;font-weight:bold;margin-bottom:12px;'>📊 Analise Social</div>
+            <a href='https://lunarcrush.com/' class='link-btn'>LunarCrush</a>
+            <a href='https://coinmarketcal.com' class='link-btn'>CoinMarketCal</a>
         </div>""", unsafe_allow_html=True)
     with cb:
         st.markdown("""
         <div class='premium-card'>
-            <h3 style='color:#FFD700;'>🛡️ Seguranca Anti-Rugpull</h3>
-            <a href='https://tokensniffer.com/' class='link-button'>Token Sniffer</a>
-            <a href='https://dexscreener.com/' class='link-button'>DEX Screener</a>
-            <div class='step-box'>Verifique liquidez travada e honeypot antes de comprar.</div>
+            <div style='color:#FFD700;font-size:16px;font-weight:bold;margin-bottom:12px;'>🛡️ Seguranca Anti-Rugpull</div>
+            <a href='https://tokensniffer.com/' class='link-btn'>Token Sniffer</a>
+            <a href='https://dexscreener.com/' class='link-btn'>DEX Screener</a>
+            <div class='step-box' style='margin-top:12px;color:#AAA;'>
+                Verifique liquidez travada e honeypot antes de comprar.
+            </div>
         </div>
         <div class='premium-card'>
-            <h3 style='color:#FFD700;'>⚖️ Regras Sniper</h3>
-            <ul>
+            <div style='color:#FFD700;font-size:16px;font-weight:bold;margin-bottom:12px;'>⚖️ Regras Sniper</div>
+            <ul style='color:#AAA;padding-left:18px;'>
                 <li>Nunca entre apos pump +100% no dia</li>
                 <li>FDV abaixo de $50M = oportunidade</li>
                 <li>Backers tier-1 = listagem garantida</li>
